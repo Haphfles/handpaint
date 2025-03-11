@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Hand-Controlled Particle Emitter with Explosion</title>
+    <title>Hand-Controlled Particle Emitter with Huge Explosion</title>
     <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
@@ -39,8 +39,8 @@
         let lastLeftDetection = 0;
         let lastRightDetection = 0;
         const detectionTimeout = 500;
-        let lastExplosion = 0; // Cooldown for explosion
-        const explosionCooldown = 500; // 500ms between explosions
+        let lastExplosion = 0;
+        const explosionCooldown = 500;
 
         // Particle system
         let particles = [];
@@ -49,10 +49,10 @@
             constructor(x, y, baseSize, isExplosion = false) {
                 this.x = x;
                 this.y = y;
-                this.vx = isExplosion ? random(-2, 2) : random(-0.5, 0.5); // Faster for explosion
+                this.vx = isExplosion ? random(-10, 10) : random(-0.5, 0.5);
                 this.vy = isExplosion ? random(-2, 2) : random(-0.5, 0.5);
                 this.size = random(baseSize * 0.5, baseSize * 1.5);
-                this.life = isExplosion ? random(30, 60) : random(60, 120); // Shorter life for explosion
+                this.life = isExplosion ? random(150, 300) : random(60, 120); // Huge explosion via longer life
                 this.color = color(random(100, 200), random(50, 150), random(150, 255), 255);
             }
 
@@ -60,7 +60,7 @@
                 this.x += this.vx;
                 this.y += this.vy;
                 this.life--;
-                this.color.setAlpha(map(this.life, 0, 120, 0, 255));
+                this.color.setAlpha(map(this.life, 0, 300, 0, 255)); // Adjusted for longer max life
             }
 
             display() {
@@ -108,10 +108,10 @@
             // Check for finger proximity and trigger explosion
             if (leftHandX !== null && rightHandX !== null) {
                 let dist = Math.sqrt(Math.pow(smoothLeftX - smoothRightX, 2) + Math.pow(smoothLeftY - smoothRightY, 2));
-                if (dist < 100 && Date.now() - lastExplosion > explosionCooldown) { // 100px threshold
+                if (dist < 100 && Date.now() - lastExplosion > explosionCooldown) {
                     let midX = (smoothLeftX + smoothRightX) / 2;
                     let midY = (smoothLeftY + smoothRightY) / 2;
-                    for (let i = 0; i < 200; i++) { // Big burst of particles
+                    for (let i = 0; i < 200; i++) {
                         particles.push(new Particle(midX, midY, (leftSize + rightSize) / 2, true));
                     }
                     lastExplosion = Date.now();
