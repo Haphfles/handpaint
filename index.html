@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Hand-Controlled Paint Circles</title>
+    <title>Hand-Controlled Particle Emitter</title>
     <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
@@ -25,45 +25,92 @@
     <video id="videoElement" autoplay playsinline></video>
 
     <script>
-        let leftHandX = 0;
-        let leftHandY = 0;
-        let rightHandX = 0;
-        let rightHandY = 0;
+        let leftHandX = null;
+        let leftHandY = null;
+        let rightHandX = null;
+        let rightHandY = null;
         let smoothLeftX = 0;
         let smoothLeftY = 0;
         let smoothRightX = 0;
         let smoothRightY = 0;
-        let leftSize = 50;
-        let rightSize = 50;
-        const smoothing = 0.7;
+        let leftSize = 1;
+        let rightSize = 1;
+        const smoothing = 0.6;
+        let lastLeftDetection = 0;
+        let lastRightDetection = 0;
+        const detectionTimeout = 500;
+
+        // Particle system
+        let particles = [];
+
+        class Particle {
+            constructor(x, y, baseSize) {
+                this.x = x;
+                this.y = y;
+                this.vx = random(-0.5, 0.5); // Small spread
+                this.vy = random(-0.5, 0.5);
+                this.size = random(baseSize * 0.5, baseSize * 1.5); // Still small particles
+                this.life = random(60, 120); // Longer lifetime (3x previous max)
+                this.color = color(random(100, 200), random(50, 150), random(150, 255), 255); // Purple-blue
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+                this.color.setAlpha(map(this.life, 0, 120, 0, 255));
+            }
+
+            display() {
+                noStroke();
+                fill(this.color);
+                ellipse(this.x, this.y, this.size, this.size);
+            }
+
+            isDead() {
+                return this.life <= 0;
+            }
+        }
 
         function setup() {
             createCanvas(windowWidth, windowHeight);
-            background(50); // Start with dark gray
+            background(10, 15, 20);
+            for (let i = 0; i < 200; i++) {
+                stroke(255, random(50, 150));
+                point(random(width), random(height));
+            }
             console.log("p5.js setup complete");
         }
 
         function draw() {
-            // Semi-transparent background for fading trail
-            background(100, 150, 200, 15); // Alpha 15 for ~4-5s fade
+            background(10, 15, 20, 50); // Slight fade
 
-            // Smooth positions
-            smoothLeftX = lerp(smoothLeftX, leftHandX, 1 - smoothing);
-            smoothLeftY = lerp(smoothLeftY, leftHandY, 1 - smoothing);
-            smoothRightX = lerp(smoothRightX, rightHandX, 1 - smoothing);
-            smoothRightY = lerp(smoothRightY, rightHandY, 1 - smoothing);
+            // Update smoothed positions
+            if (leftHandX !== null) smoothLeftX = lerp(smoothLeftX, leftHandX, 1 - smoothing);
+            if (leftHandY !== null) smoothLeftY = lerp(smoothLeftY, leftHandY, 1 - smoothing);
+            if (rightHandX !== null) smoothRightX = lerp(smoothRightX, rightHandX, 1 - smoothing);
+            if (rightHandY !== null) smoothRightY = lerp(smoothRightY, rightHandY, 1 - smoothing);
 
-            // Red circles
-            fill(255, 0, 0);
-            noStroke();
-            if (leftHandX !== 0 || leftHandY !== 0) {
-                ellipse(smoothLeftX, smoothLeftY, leftSize, leftSize);
+            // Emit more particles for a 5x bigger effect
+            if (Date.now() - lastLeftDetection < detectionTimeout) {
+                for (let i = 0; i < 50; i++) { // 5x more particles (10 -> 50)
+                    particles.push(new Particle(smoothLeftX, smoothLeftY, leftSize));
+                }
             }
-            if (rightHandX !== 0 || rightHandY !== 0) {
-                ellipse(smoothRightX, smoothRightY, rightSize, rightSize);
+            if (Date.now() - lastRightDetection < detectionTimeout) {
+                for (let i = 0; i < 50; i++) {
+                    particles.push(new Particle(smoothRightX, smoothRightY, rightSize));
+                }
             }
 
-            console.log("Drawing circles - Left:", smoothLeftX, smoothLeftY, "Size:", leftSize, "Right:", smoothRightX, smoothRightY, "Size:", rightSize);
+            // Update and draw particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].display();
+                if (particles[i].isDead()) {
+                    particles.splice(i, 1);
+                }
+            }
         }
 
         const videoElement = document.getElementById('videoElement');
@@ -74,17 +121,17 @@
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
         });
 
         hands.onResults((results) => {
-            leftHandX = 0;
-            leftHandY = 0;
-            rightHandX = 0;
-            rightHandY = 0;
-            leftSize = 50;
-            rightSize = 50;
+            leftHandX = null;
+            leftHandY = null;
+            rightHandX = null;
+            rightHandY = null;
+            leftSize = 1;
+            rightSize = 1;
 
             if (results.multiHandLandmarks && results.multiHandedness) {
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
@@ -93,22 +140,25 @@
                     const indexFinger = hand[8];
                     const thumb = hand[4];
 
-                    let x = windowWidth - (indexFinger.x * windowWidth); // Flipped x
-                    let y = indexFinger.y * windowHeight;
+                    if (handedness.score > 0.7) {
+                        let x = windowWidth - (indexFinger.x * windowWidth);
+                        let y = indexFinger.y * windowHeight;
+                        let thumbX = windowWidth - (thumb.x * windowWidth);
+                        let thumbY = thumb.y * windowHeight;
+                        let dist = Math.sqrt(Math.pow(x - thumbX, 2) + Math.pow(y - thumbY, 2));
+                        let size = map(dist, 20, 200, 1, 5); // Small particle size range
 
-                    let thumbX = windowWidth - (thumb.x * windowWidth);
-                    let thumbY = thumb.y * windowHeight;
-                    let dist = Math.sqrt(Math.pow(x - thumbX, 2) + Math.pow(y - thumbY, 2));
-                    let size = constrain(dist, 20, 200);
-
-                    if (handedness.label === "Left") {
-                        leftHandX = x;
-                        leftHandY = y;
-                        leftSize = size;
-                    } else if (handedness.label === "Right") {
-                        rightHandX = x;
-                        rightHandY = y;
-                        rightSize = size;
+                        if (handedness.label === "Left") {
+                            leftHandX = x;
+                            leftHandY = y;
+                            leftSize = size;
+                            lastLeftDetection = Date.now();
+                        } else if (handedness.label === "Right") {
+                            rightHandX = x;
+                            rightHandY = y;
+                            rightSize = size;
+                            lastRightDetection = Date.now();
+                        }
                     }
                 }
             }
@@ -121,9 +171,7 @@
             width: 640,
             height: 480
         });
-        console.log("Starting camera...");
-        camera.start();
-        console.log("Camera started");
+        camera.start().then(() => console.log("Camera started"));
     </script>
 </body>
 </html>
