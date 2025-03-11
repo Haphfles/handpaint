@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hand-Controlled Paint Circles</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/p5.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+        }
+        #videoElement {
+            display: none;
+        }
+        canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <video id="videoElement" autoplay playsinline></video>
+
+    <script>
+        let leftHandX = 0;
+        let leftHandY = 0;
+        let rightHandX = 0;
+        let rightHandY = 0;
+        let smoothLeftX = 0;
+        let smoothLeftY = 0;
+        let smoothRightX = 0;
+        let smoothRightY = 0;
+        let leftSize = 50;
+        let rightSize = 50;
+        const smoothing = 0.7;
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            background(50); // Start with dark gray
+            console.log("p5.js setup complete");
+        }
+
+        function draw() {
+            // Semi-transparent background for fading trail
+            background(100, 150, 200, 15); // Alpha 15 for ~4-5s fade
+
+            // Smooth positions
+            smoothLeftX = lerp(smoothLeftX, leftHandX, 1 - smoothing);
+            smoothLeftY = lerp(smoothLeftY, leftHandY, 1 - smoothing);
+            smoothRightX = lerp(smoothRightX, rightHandX, 1 - smoothing);
+            smoothRightY = lerp(smoothRightY, rightHandY, 1 - smoothing);
+
+            // Red circles
+            fill(255, 0, 0);
+            noStroke();
+            if (leftHandX !== 0 || leftHandY !== 0) {
+                ellipse(smoothLeftX, smoothLeftY, leftSize, leftSize);
+            }
+            if (rightHandX !== 0 || rightHandY !== 0) {
+                ellipse(smoothRightX, smoothRightY, rightSize, rightSize);
+            }
+
+            console.log("Drawing circles - Left:", smoothLeftX, smoothLeftY, "Size:", leftSize, "Right:", smoothRightX, smoothRightY, "Size:", rightSize);
+        }
+
+        const videoElement = document.getElementById('videoElement');
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults((results) => {
+            leftHandX = 0;
+            leftHandY = 0;
+            rightHandX = 0;
+            rightHandY = 0;
+            leftSize = 50;
+            rightSize = 50;
+
+            if (results.multiHandLandmarks && results.multiHandedness) {
+                for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+                    const hand = results.multiHandLandmarks[i];
+                    const handedness = results.multiHandedness[i];
+                    const indexFinger = hand[8];
+                    const thumb = hand[4];
+
+                    let x = windowWidth - (indexFinger.x * windowWidth); // Flipped x
+                    let y = indexFinger.y * windowHeight;
+
+                    let thumbX = windowWidth - (thumb.x * windowWidth);
+                    let thumbY = thumb.y * windowHeight;
+                    let dist = Math.sqrt(Math.pow(x - thumbX, 2) + Math.pow(y - thumbY, 2));
+                    let size = constrain(dist, 20, 200);
+
+                    if (handedness.label === "Left") {
+                        leftHandX = x;
+                        leftHandY = y;
+                        leftSize = size;
+                    } else if (handedness.label === "Right") {
+                        rightHandX = x;
+                        rightHandY = y;
+                        rightSize = size;
+                    }
+                }
+            }
+        });
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+        console.log("Starting camera...");
+        camera.start();
+        console.log("Camera started");
+    </script>
+</body>
+</html>
