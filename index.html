@@ -33,9 +33,13 @@
         let smoothLeftY = 0;
         let smoothRightX = 0;
         let smoothRightY = 0;
+        let prevLeftX = 0;
+        let prevLeftY = 0;
+        let prevRightX = 0;
+        let prevRightY = 0;
         let leftSize = 1;
         let rightSize = 1;
-        const smoothing = 0.6;
+        const smoothing = 0.8; // Increased for faster response
         let lastLeftDetection = 0;
         let lastRightDetection = 0;
         const detectionTimeout = 500;
@@ -52,7 +56,7 @@
                 this.vx = isExplosion ? random(-10, 10) : random(-0.5, 0.5);
                 this.vy = isExplosion ? random(-2, 2) : random(-0.5, 0.5);
                 this.size = random(baseSize * 0.5, baseSize * 1.5);
-                this.life = isExplosion ? random(150, 300) : random(60, 120); // Huge explosion via longer life
+                this.life = isExplosion ? random(150, 300) : random(60, 120);
                 this.color = color(random(100, 200), random(50, 150), random(150, 255), 255);
             }
 
@@ -60,7 +64,7 @@
                 this.x += this.vx;
                 this.y += this.vy;
                 this.life--;
-                this.color.setAlpha(map(this.life, 0, 300, 0, 255)); // Adjusted for longer max life
+                this.color.setAlpha(map(this.life, 0, 300, 0, 255));
             }
 
             display() {
@@ -93,16 +97,30 @@
             if (rightHandX !== null) smoothRightX = lerp(smoothRightX, rightHandX, 1 - smoothing);
             if (rightHandY !== null) smoothRightY = lerp(smoothRightY, rightHandY, 1 - smoothing);
 
-            // Regular particle emission
+            // Emit particles along the path for smooth trails
             if (Date.now() - lastLeftDetection < detectionTimeout) {
-                for (let i = 0; i < 50; i++) {
-                    particles.push(new Particle(smoothLeftX, smoothLeftY, leftSize));
+                let steps = dist(prevLeftX, prevLeftY, smoothLeftX, smoothLeftY) / 5; // Adjust step size
+                for (let t = 0; t <= 1; t += 1 / max(1, steps)) {
+                    let x = lerp(prevLeftX, smoothLeftX, t);
+                    let y = lerp(prevLeftY, smoothLeftY, t);
+                    for (let i = 0; i < 5; i++) { // Reduced per-point emission for performance
+                        particles.push(new Particle(x, y, leftSize));
+                    }
                 }
+                prevLeftX = smoothLeftX;
+                prevLeftY = smoothLeftY;
             }
             if (Date.now() - lastRightDetection < detectionTimeout) {
-                for (let i = 0; i < 50; i++) {
-                    particles.push(new Particle(smoothRightX, smoothRightY, rightSize));
+                let steps = dist(prevRightX, prevRightY, smoothRightX, smoothRightY) / 5;
+                for (let t = 0; t <= 1; t += 1 / max(1, steps)) {
+                    let x = lerp(prevRightX, smoothRightX, t);
+                    let y = lerp(prevRightY, smoothRightY, t);
+                    for (let i = 0; i < 5; i++) {
+                        particles.push(new Particle(x, y, rightSize));
+                    }
                 }
+                prevRightX = smoothRightX;
+                prevRightY = smoothRightY;
             }
 
             // Check for finger proximity and trigger explosion
